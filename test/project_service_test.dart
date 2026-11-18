@@ -3,6 +3,7 @@ import 'package:zinknote/model/project.dart';
 import 'package:zinknote/model/task.dart';
 import 'package:zinknote/model/task_priority.dart';
 import 'package:zinknote/service/project_service.dart';
+import 'package:zinknote/service/task_service.dart';
 
 void main() {
   late List<Project> projects;
@@ -164,5 +165,38 @@ void main() {
     dated.isCompleted = true;
     noDate.isCompleted = true;
     expect(service.getPriorityTasks(projects), isEmpty);
+  });
+
+  test('project progress and priorities reflect task service changes', () {
+    final taskService = TaskService(projects);
+    final project = service.createProject('Course');
+    final review = taskService.createTask(project.id, 'Review notes');
+    final assignment = taskService.createTask(
+      project.id,
+      'Assignment',
+      priority: TaskPriority.low,
+    );
+    expect(service.getPriorityTasks(projects), [review, assignment]);
+
+    taskService.updateTask(
+      project.id,
+      assignment.id,
+      'Submit assignment',
+      dueDate: DateTime(2026, 12, 1),
+      priority: TaskPriority.high,
+    );
+    expect(service.getPriorityTasks(projects), [assignment, review]);
+
+    final draft = taskService.addSubtask(assignment.id, 'Finish draft');
+    expect(
+      () => taskService.setTaskCompleted(assignment.id, true),
+      throwsStateError,
+    );
+    expect(service.calculateProgress(project.id), 0.0);
+
+    taskService.setSubtaskCompleted(assignment.id, draft.id, true);
+    taskService.setTaskCompleted(assignment.id, true);
+    expect(service.calculateProgress(project.id), 50.0);
+    expect(service.getPriorityTasks(projects), [review]);
   });
 }
